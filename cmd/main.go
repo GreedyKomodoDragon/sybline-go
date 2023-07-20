@@ -53,11 +53,11 @@ func producer(queue bool, amount int) {
 		queueName := "randomOne"
 		queueNameTwo := "randomTwo"
 
-		if err := client.CreateQueue(ctx, "route", queueName, amount); err != nil {
+		if err := client.CreateQueue(ctx, "route", queueName, amount, 3, true); err != nil {
 			log.Fatal("error queue:", err)
 		}
 
-		if err := client.CreateQueue(ctx, "routeTwo", queueNameTwo, amount); err != nil {
+		if err := client.CreateQueue(ctx, "routeTwo", queueNameTwo, amount, 3, true); err != nil {
 			log.Fatal("error queue:", err)
 		}
 	}
