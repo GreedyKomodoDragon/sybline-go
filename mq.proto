@@ -21,6 +21,7 @@ service MQEndpoints {
     rpc IsLeaderNode(LeaderNodeRequest) returns (Status) {}
     rpc DeleteUser(UserInformation) returns (Status) {} 
     rpc BatchAck(BatchAckUpdate) returns (Status) {} 
+    rpc BatchNack(BatchNackUpdate) returns (Status) {} 
 }
 
 message MessageInfo {
@@ -50,6 +51,8 @@ message QueueInfo {
     string routingKey = 1;
     string name = 2;
     uint32 size = 3;
+    uint32 retryLimit = 4;
+    bool hasDLQueue = 5;
 }
 
 message AckUpdate {
@@ -100,4 +103,9 @@ message UserInformation {
 message BatchAckUpdate {
     string queueName = 1;
     repeated bytes id = 2;
+}
+
+message BatchNackUpdate {
+    string queueName = 1;
+    repeated bytes ids = 2;
 }

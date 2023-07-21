@@ -33,7 +33,7 @@ type SyblineClient interface {
 	SubmitMessage(ctx context.Context, routingKey string, data []byte) error
 	SubmitBatchMessage(ctx context.Context, msg []Message) error
 	GetMessages(ctx context.Context, queue string, amount uint32) ([]*messages.MessageData, error)
-	CreateQueue(ctx context.Context, routing, name string, size uint32) error
+	CreateQueue(ctx context.Context, routing, name string, size, retryLimit uint32, hasDLQ bool) error
 	DeleteOueue(ctx context.Context, name string) error
 	Ack(ctx context.Context, queue string, id []byte) error
 	Login(ctx context.Context, username string) error
@@ -269,7 +269,7 @@ func (c *syblineClient) GetMessages(ctx context.Context, queue string, amount ui
 	}
 }
 
-func (c *syblineClient) CreateQueue(ctx context.Context, routing, name string, size uint32) error {
+func (c *syblineClient) CreateQueue(ctx context.Context, routing, name string, size, retryLimit uint32, hasDLQ bool) error {
 	if c.headers == nil {
 		return ErrMissingToken
 	}
@@ -285,6 +285,8 @@ func (c *syblineClient) CreateQueue(ctx context.Context, routing, name string, s
 		RoutingKey: routing,
 		Name:       name,
 		Size:       size,
+		RetryLimit: retryLimit,
+		HasDLQueue: hasDLQ,
 	}
 
 	for {
