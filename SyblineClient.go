@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GreedyKomodoDragon/sybline-go/messages"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -32,7 +31,7 @@ var (
 type SyblineClient interface {
 	SubmitMessage(ctx context.Context, routingKey string, data []byte) error
 	SubmitBatchMessage(ctx context.Context, msg []Message) error
-	GetMessages(ctx context.Context, queue string, amount uint32) ([]*messages.MessageData, error)
+	GetMessages(ctx context.Context, queue string, amount uint32) ([]*MessageData, error)
 	CreateQueue(ctx context.Context, routing, name string, size, retryLimit uint32, hasDLQ bool) error
 	DeleteOueue(ctx context.Context, name string) error
 	Ack(ctx context.Context, queue string, id []byte) error
@@ -71,8 +70,6 @@ func NewBasicSyblineClient(serverAddr []string, passwordManager PasswordManager,
 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 
-	messages.Initialise()
-
 	for _, address := range serverAddr {
 		conn, err := grpc.Dial(address, opts...)
 		if err != nil {
@@ -80,7 +77,7 @@ func NewBasicSyblineClient(serverAddr []string, passwordManager PasswordManager,
 		}
 
 		gClient := NewMQEndpointsClient(conn)
-		status, err := gClient.IsLeaderNode(context.Background(), &messages.LeaderNodeRequest{})
+		status, err := gClient.IsLeaderNode(context.Background(), &LeaderNodeRequest{})
 		if err != nil || !status.Status {
 			continue
 		}
@@ -103,19 +100,17 @@ func NewBasicSyblineClient(serverAddr []string, passwordManager PasswordManager,
 	return nil, ErrNoValidAddresses
 }
 
-func NewTLSSyblineClient(serverAddr []string, caFile string, passwordManager PasswordManager, config Config) (SyblineClient, error) {
+func NewTLSSyblineClient(serverAddr []string, caFile, certFile, keyFile string, skipVerification bool, passwordManager PasswordManager, config Config) (SyblineClient, error) {
 	if len(serverAddr) == 0 {
 		return nil, ErrNoServerAddresses
 	}
 
-	opts := []grpc.DialOption{}
-	creds, err := credentials.NewClientTLSFromFile(caFile, "")
+	tlsConfig, err := createTLSConfig(caFile, certFile, keyFile, skipVerification)
 	if err != nil {
 		log.Fatalf("Failed to create TLS credentials %v", err)
 	}
-	opts = append(opts, grpc.WithTransportCredentials(creds))
 
-	messages.Initialise()
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))}
 
 	for _, address := range serverAddr {
 		conn, err := grpc.Dial(address, opts...)
@@ -124,7 +119,7 @@ func NewTLSSyblineClient(serverAddr []string, caFile string, passwordManager Pas
 		}
 
 		gClient := NewMQEndpointsClient(conn)
-		status, err := gClient.IsLeaderNode(context.Background(), &messages.LeaderNodeRequest{})
+		status, err := gClient.IsLeaderNode(context.Background(), &LeaderNodeRequest{})
 		if err != nil || !status.Status {
 			continue
 		}
@@ -160,7 +155,7 @@ func (c *syblineClient) SubmitMessage(ctx context.Context, routingKey string, da
 
 	ctx = metadata.NewOutgoingContext(ctx, c.headers)
 	for {
-		message, err := c.gClient.SubmitMessage(ctx, &messages.MessageInfo{
+		message, err := c.gClient.SubmitMessage(ctx, &MessageInfo{
 			RoutingKey: routingKey,
 			Data:       data,
 		})
@@ -190,20 +185,20 @@ func (c *syblineClient) SubmitBatchMessage(ctx context.Context, msgRaw []Message
 		return ErrMissingToken
 	}
 
-	msgs := []*messages.MessageInfo{}
+	msgs := []*MessageInfo{}
 	for _, data := range msgRaw {
 		if err := validateMessage(data.Data, data.Rk); err != nil {
 			return err
 		}
 
-		msgs = append(msgs, &messages.MessageInfo{
+		msgs = append(msgs, &MessageInfo{
 			RoutingKey: data.Rk,
 			Data:       data.Data,
 		})
 	}
 
 	ctx = metadata.NewOutgoingContext(ctx, c.headers)
-	msgsWrapped := &messages.BatchMessages{
+	msgsWrapped := &BatchMessages{
 		Messages: msgs,
 	}
 
@@ -230,7 +225,7 @@ func (c *syblineClient) SubmitBatchMessage(ctx context.Context, msgRaw []Message
 	}
 }
 
-func (c *syblineClient) GetMessages(ctx context.Context, queue string, amount uint32) ([]*messages.MessageData, error) {
+func (c *syblineClient) GetMessages(ctx context.Context, queue string, amount uint32) ([]*MessageData, error) {
 	if c.headers == nil {
 		return nil, ErrMissingToken
 	}
@@ -242,7 +237,7 @@ func (c *syblineClient) GetMessages(ctx context.Context, queue string, amount ui
 	ctx = metadata.NewOutgoingContext(ctx, c.headers)
 
 	timeout := NewTimeout(c.config.TimeoutAttempts, c.config.TimeoutSec)
-	payload := &messages.RequestMessageData{
+	payload := &RequestMessageData{
 		QueueName: queue,
 		Amount:    amount,
 	}
@@ -281,7 +276,7 @@ func (c *syblineClient) CreateQueue(ctx context.Context, routing, name string, s
 	ctx = metadata.NewOutgoingContext(ctx, c.headers)
 
 	timeout := NewTimeout(c.config.TimeoutAttempts, c.config.TimeoutSec)
-	payload := &messages.QueueInfo{
+	payload := &QueueInfo{
 		RoutingKey: routing,
 		Name:       name,
 		Size:       size,
@@ -321,7 +316,7 @@ func (c *syblineClient) Ack(ctx context.Context, queue string, id []byte) error 
 	}
 
 	ctx = metadata.NewOutgoingContext(ctx, c.headers)
-	payload := &messages.AckUpdate{
+	payload := &AckUpdate{
 		QueueName: queue,
 		Id:        id,
 	}
@@ -358,7 +353,7 @@ func (c *syblineClient) BatchAck(ctx context.Context, queue string, ids [][]byte
 	}
 
 	ctx = metadata.NewOutgoingContext(ctx, c.headers)
-	payload := &messages.BatchAckUpdate{
+	payload := &BatchAckUpdate{
 		QueueName: queue,
 		Id:        ids,
 	}
@@ -404,7 +399,7 @@ func (c *syblineClient) Login(ctx context.Context, username string) error {
 		return err
 	}
 
-	payload := &messages.Credentials{
+	payload := &Credentials{
 		Username: username,
 		Password: password,
 	}
@@ -445,7 +440,7 @@ func (c *syblineClient) ChangePassword(ctx context.Context, username, oldPasswor
 
 	for {
 
-		status, err := c.gClient.ChangePassword(ctx, &messages.ChangeCredentials{
+		status, err := c.gClient.ChangePassword(ctx, &ChangeCredentials{
 			Username:    username,
 			OldPassword: oldPassword,
 			NewPassword: newPassword,
@@ -481,7 +476,7 @@ func (c *syblineClient) Nack(ctx context.Context, queue string, id []byte) error
 	timeout := NewTimeout(c.config.TimeoutAttempts, c.config.TimeoutSec)
 
 	for {
-		status, err := c.gClient.Nack(ctx, &messages.AckUpdate{
+		status, err := c.gClient.Nack(ctx, &AckUpdate{
 			QueueName: queue,
 			Id:        id,
 		})
@@ -518,7 +513,7 @@ func (c *syblineClient) BatchNack(ctx context.Context, queue string, ids [][]byt
 	timeout := NewTimeout(c.config.TimeoutAttempts, c.config.TimeoutSec)
 
 	for {
-		status, err := c.gClient.BatchNack(ctx, &messages.BatchNackUpdate{
+		status, err := c.gClient.BatchNack(ctx, &BatchNackUpdate{
 			QueueName: queue,
 			Ids:       ids,
 		})
@@ -563,7 +558,7 @@ func (c *syblineClient) DeleteOueue(ctx context.Context, name string) error {
 	timeout := NewTimeout(c.config.TimeoutAttempts, c.config.TimeoutSec)
 
 	for {
-		status, err := c.gClient.DeleteOueue(ctx, &messages.DeleteQueueInfo{
+		status, err := c.gClient.DeleteQueue(ctx, &DeleteQueueInfo{
 			QueueName: name,
 		})
 
@@ -598,7 +593,7 @@ func (c *syblineClient) AddRoutingKey(ctx context.Context, queue, routingKey str
 	timeout := NewTimeout(c.config.TimeoutAttempts, c.config.TimeoutSec)
 
 	for {
-		status, err := c.gClient.AddRoutingKey(ctx, &messages.AddRoute{
+		status, err := c.gClient.AddRoutingKey(ctx, &AddRoute{
 			RouteName: routingKey,
 			QueueName: queue,
 		})
@@ -634,7 +629,7 @@ func (c *syblineClient) DeleteRoutingKey(ctx context.Context, queue, routingKey 
 	timeout := NewTimeout(c.config.TimeoutAttempts, c.config.TimeoutSec)
 
 	for {
-		status, err := c.gClient.DeleteRoutingKey(ctx, &messages.DeleteRoute{
+		status, err := c.gClient.DeleteRoutingKey(ctx, &DeleteRoute{
 			RouteName: routingKey,
 			QueueName: queue,
 		})
@@ -666,7 +661,7 @@ func (c *syblineClient) CreateUser(ctx context.Context, username, password strin
 	}
 
 	ctx = metadata.NewOutgoingContext(ctx, c.headers)
-	payload := &messages.UserCreds{
+	payload := &UserCreds{
 		Username: username,
 		Password: password,
 	}
@@ -703,7 +698,7 @@ func (c *syblineClient) DeleteUser(ctx context.Context, username string) error {
 	}
 
 	ctx = metadata.NewOutgoingContext(ctx, c.headers)
-	payload := &messages.UserInformation{
+	payload := &UserInformation{
 		Username: username,
 	}
 	timeout := NewTimeout(c.config.TimeoutAttempts, c.config.TimeoutSec)
@@ -740,7 +735,7 @@ func (c *syblineClient) reconnect(ctx context.Context) error {
 	defer c.reconnectLock.Unlock()
 
 	// double check another goroutine has no re-establised connection
-	status, err := c.gClient.IsLeaderNode(context.Background(), &messages.LeaderNodeRequest{})
+	status, err := c.gClient.IsLeaderNode(context.Background(), &LeaderNodeRequest{})
 	if err == nil && status != nil && status.Status {
 		return nil
 	}
@@ -752,7 +747,7 @@ func (c *syblineClient) reconnect(ctx context.Context) error {
 		}
 
 		gClient := NewMQEndpointsClient(conn)
-		status, err := gClient.IsLeaderNode(context.Background(), &messages.LeaderNodeRequest{})
+		status, err := gClient.IsLeaderNode(context.Background(), &LeaderNodeRequest{})
 		if err != nil || !status.Status {
 			continue
 		}

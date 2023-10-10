@@ -9,8 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GreedyKomodoDragon/sybline-go/handler"
-	"github.com/GreedyKomodoDragon/sybline-go/messages"
+	handler "github.com/GreedyKomodoDragon/sybline-go"
 )
 
 func main() {
@@ -33,10 +32,18 @@ func producer(queue bool, amount int) {
 	passwordManager := handler.NewUnsecurePasswordManager()
 	passwordManager.SetPassword("sybline", "sybline")
 
-	client, err := handler.NewBasicSyblineClient([]string{"localhost:2221", "localhost:2222", "localhost:2223"}, passwordManager, handler.Config{
-		TimeoutSec:      5,
-		TimeoutAttempts: 3,
-	})
+	client, err := handler.NewTLSSyblineClient(
+		[]string{"localhost:2221", "localhost:2222", "localhost:2223"},
+		"cert/ca-cert.pem",
+		"cert/cert.pem",
+		"cert/key.pem",
+		true,
+		passwordManager,
+		handler.Config{
+			TimeoutSec:      5,
+			TimeoutAttempts: 3,
+		})
+
 	if err != nil {
 		log.Fatal("error cannot connect:", err)
 	}
@@ -116,10 +123,12 @@ func producer(queue bool, amount int) {
 	for k := 0; k < amount; k++ {
 		go func(i int, messages []handler.Message) {
 			for {
+				// startTime := time.Now()
 				if err := client.SubmitBatchMessage(ctx, messages); err != nil {
 					fmt.Println("error submit:", err, i)
 				}
-				time.Sleep(50 * time.Millisecond)
+				// fmt.Println(time.Since(startTime))
+				// time.Sleep(20 * time.Millisecond)
 			}
 
 		}(k, message)
@@ -164,7 +173,7 @@ func consumer(running bool) {
 				for {
 					data := <-consumer.Messages
 					dataTwo := <-consumer.Messages
-					go func(data, dataTwo *messages.MessageData) {
+					go func(data, dataTwo *handler.MessageData) {
 
 						ids := [][]byte{data.Id, dataTwo.Id}
 						if err := consumer.BatchAck(context.Background(), ids); err != nil {

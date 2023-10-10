@@ -4,18 +4,15 @@ import (
 	"context"
 
 	"time"
-
-	"github.com/GreedyKomodoDragon/sybline-go/messages"
-	"github.com/GreedyKomodoDragon/sybline-go/utils"
 )
 
 type syblineConsumer struct {
 	ticker       *time.Ticker // periodic ticker
-	Messages     chan *messages.MessageData
+	Messages     chan *MessageData
 	Errs         chan error
 	client       SyblineClient
 	capacity     int
-	holding      *utils.SafeInt
+	holding      *safeInt
 	queue        string
 	tickerPeriod time.Duration
 }
@@ -24,11 +21,11 @@ func newSyblineConsumer(capacity int, queue string, tickerPeriod time.Duration, 
 	rv := &syblineConsumer{
 		tickerPeriod: tickerPeriod,
 		ticker:       time.NewTicker(tickerPeriod),
-		Messages:     make(chan *messages.MessageData, capacity),
+		Messages:     make(chan *MessageData, capacity),
 		Errs:         make(chan error, 1),
 		client:       client,
 		capacity:     capacity,
-		holding:      utils.NewSafeInt(0),
+		holding:      NewSafeInt(0),
 		queue:        queue,
 	}
 
