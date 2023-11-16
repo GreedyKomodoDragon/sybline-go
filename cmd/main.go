@@ -32,17 +32,10 @@ func producer(queue bool, amount int) {
 	passwordManager := handler.NewUnsecurePasswordManager()
 	passwordManager.SetPassword("sybline", "sybline")
 
-	client, err := handler.NewTLSSyblineClient(
-		[]string{"localhost:2221", "localhost:2222", "localhost:2223"},
-		"cert/ca-cert.pem",
-		"cert/cert.pem",
-		"cert/key.pem",
-		true,
-		passwordManager,
-		handler.Config{
-			TimeoutSec:      5,
-			TimeoutAttempts: 3,
-		})
+	client, err := handler.NewBasicSyblineClient([]string{"localhost:2221", "localhost:2222", "localhost:2223"}, passwordManager, handler.Config{
+		TimeoutSec:      2,
+		TimeoutAttempts: 3,
+	})
 
 	if err != nil {
 		log.Fatal("error cannot connect:", err)
@@ -68,6 +61,8 @@ func producer(queue bool, amount int) {
 			log.Fatal("error queue:", err)
 		}
 	}
+
+	defer client.Logout(ctx)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -147,7 +142,7 @@ func consumer(running bool) {
 
 	for h := 0; h < 20; h++ {
 		client, err := handler.NewBasicSyblineClient([]string{"localhost:2221", "localhost:2222", "localhost:2223"}, passwordManager, handler.Config{
-			TimeoutSec:      5,
+			TimeoutSec:      1,
 			TimeoutAttempts: 3,
 		})
 		if err != nil {
@@ -156,7 +151,8 @@ func consumer(running bool) {
 
 		go func(client handler.SyblineClient, i int) {
 			// this is the critical step that includes your headers
-			if err := client.Login(context.Background(), "sybline"); err != nil {
+			ctx := context.Background()
+			if err := client.Login(ctx, "sybline"); err != nil {
 				log.Fatal("error login:", err)
 			}
 
@@ -172,6 +168,7 @@ func consumer(running bool) {
 
 				for {
 					data := <-consumer.Messages
+					fmt.Println("data:", string(data.Data))
 					dataTwo := <-consumer.Messages
 					go func(data, dataTwo *handler.MessageData) {
 
@@ -183,7 +180,7 @@ func consumer(running bool) {
 				}
 			}
 
-			msgs, err := client.GetMessages(context.Background(), "randomOne", 10)
+			msgs, err := client.GetMessages(ctx, "randomOne", 10)
 			if err != nil {
 				log.Fatal("error get:", err)
 			}

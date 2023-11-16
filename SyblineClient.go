@@ -45,6 +45,7 @@ type SyblineClient interface {
 	BatchAck(ctx context.Context, queue string, ids [][]byte) error
 	BatchNack(ctx context.Context, queue string, ids [][]byte) error
 	Consumer(capacity int, time time.Duration, queue string) (*syblineConsumer, error)
+	Logout(ctx context.Context) error
 	Close()
 }
 
@@ -407,9 +408,8 @@ func (c *syblineClient) Login(ctx context.Context, username string) error {
 	head := grpc.Header(&headerReturn)
 	timeout := NewTimeout(c.config.TimeoutAttempts, c.config.TimeoutSec)
 
-	for {
+	for !timeout.HasThreadReached() {
 		status, err := c.gClient.Login(ctx, payload, head)
-
 		if err == nil && status.Status {
 			c.headers = headerReturn
 			c.username = username
@@ -417,13 +417,11 @@ func (c *syblineClient) Login(ctx context.Context, username string) error {
 			return nil
 		}
 
-		if timeout.HasThreadReached() {
-			return fmt.Errorf("unable to login")
-		}
-
 		timeout.Increment()
 		timeout.Sleep()
 	}
+
+	return fmt.Errorf("unable to login")
 }
 
 func (c *syblineClient) ChangePassword(ctx context.Context, username, oldPassword, newPassword string) error {
@@ -721,6 +719,18 @@ func (c *syblineClient) DeleteUser(ctx context.Context, username string) error {
 		timeout.Increment()
 		timeout.Sleep()
 	}
+}
+
+func (c *syblineClient) Logout(ctx context.Context) error {
+	if c.headers == nil {
+		return ErrMissingToken
+	}
+
+	ctx = metadata.NewOutgoingContext(ctx, c.headers)
+
+	_, err := c.gClient.LogOut(ctx, &LogOutRequest{})
+
+	return err
 }
 
 func (c *syblineClient) Close() {
