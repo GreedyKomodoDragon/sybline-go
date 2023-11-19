@@ -8,7 +8,7 @@ import (
 
 type syblineConsumer struct {
 	ticker       *time.Ticker // periodic ticker
-	Messages     chan *MessageData
+	Messages     *UniqueChannel
 	Errs         chan error
 	client       SyblineClient
 	capacity     int
@@ -21,7 +21,7 @@ func newSyblineConsumer(capacity int, queue string, tickerPeriod time.Duration, 
 	rv := &syblineConsumer{
 		tickerPeriod: tickerPeriod,
 		ticker:       time.NewTicker(tickerPeriod),
-		Messages:     make(chan *MessageData, capacity),
+		Messages:     NewUniqueChannel(capacity),
 		Errs:         make(chan error, 1),
 		client:       client,
 		capacity:     capacity,
@@ -49,7 +49,7 @@ func (s *syblineConsumer) run() {
 
 		s.holding.AddDelta(len(messages))
 		for _, m := range messages {
-			s.Messages <- m
+			s.Messages.Send(m)
 		}
 	}
 }

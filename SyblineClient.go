@@ -216,7 +216,7 @@ func (c *syblineClient) SubmitBatchMessage(ctx context.Context, msgRaw []Message
 		}
 
 		if timeout.HasThreadReached() {
-			return fmt.Errorf("message was unable to be submitted")
+			return fmt.Errorf("messages were unable to be submitted in batch, timeout reached")
 		}
 
 		timeout.Increment()
