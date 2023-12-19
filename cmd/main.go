@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
 	"sync"
 	"time"
@@ -60,6 +61,30 @@ func producer(queue bool, amount int) {
 		if err := client.CreateQueue(ctx, "routeTwo", queueNameTwo, amount, 3, true); err != nil {
 			log.Fatal("error queue:", err)
 		}
+	}
+
+	content, err := os.ReadFile("template.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Convert []byte content to a string
+	fileContent := string(content)
+
+	if err := client.CreateRole(ctx, fileContent); err != nil {
+		log.Fatal("error CreateRole:", err)
+	}
+
+	if err := client.CreateUser(ctx, "user", "user"); err != nil {
+		log.Fatal("error CreateUser:", err)
+	}
+
+	if err := client.AssignRole(ctx, "user", "role_name"); err != nil {
+		log.Fatal("error CreateUser:", err)
+	}
+
+	if err := client.UnassignRole(ctx, "user", "role_name"); err != nil {
+		log.Fatal("error CreateUser:", err)
 	}
 
 	defer client.Logout(ctx)
@@ -167,9 +192,9 @@ func consumer(running bool) {
 				}
 
 				for {
-					data := <-consumer.Messages
+					data := <-consumer.Messages.Ch
 					fmt.Println("data:", string(data.Data))
-					dataTwo := <-consumer.Messages
+					dataTwo := <-consumer.Messages.Ch
 					go func(data, dataTwo *handler.MessageData) {
 
 						ids := [][]byte{data.Id, dataTwo.Id}

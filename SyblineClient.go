@@ -46,6 +46,9 @@ type SyblineClient interface {
 	BatchNack(ctx context.Context, queue string, ids [][]byte) error
 	Consumer(capacity int, time time.Duration, queue string) (*syblineConsumer, error)
 	Logout(ctx context.Context) error
+	CreateRole(ctx context.Context, role string) error
+	AssignRole(ctx context.Context, username, role string) error
+	UnassignRole(ctx context.Context, username, role string) error
 	Close()
 }
 
@@ -729,6 +732,62 @@ func (c *syblineClient) Logout(ctx context.Context) error {
 	ctx = metadata.NewOutgoingContext(ctx, c.headers)
 
 	_, err := c.gClient.LogOut(ctx, &LogOutRequest{})
+
+	return err
+}
+
+func (c *syblineClient) CreateRole(ctx context.Context, role string) error {
+	if c.headers == nil {
+		return ErrMissingToken
+	}
+
+	ctx = metadata.NewOutgoingContext(ctx, c.headers)
+
+	status, err := c.gClient.CreateRole(ctx, &CreateRoleRequest{
+		Role: role,
+	})
+
+	if err == nil && status != nil && status.Status {
+		return nil
+	}
+
+	return err
+}
+
+func (c *syblineClient) AssignRole(ctx context.Context, username, role string) error {
+	if c.headers == nil {
+		return ErrMissingToken
+	}
+
+	ctx = metadata.NewOutgoingContext(ctx, c.headers)
+
+	status, err := c.gClient.AssignRole(ctx, &AssignRoleRequest{
+		Role:     role,
+		Username: username,
+	})
+
+	if err == nil && status != nil && status.Status {
+		return nil
+	}
+
+	return err
+}
+
+func (c *syblineClient) UnassignRole(ctx context.Context, username, role string) error {
+	if c.headers == nil {
+		return ErrMissingToken
+	}
+
+	ctx = metadata.NewOutgoingContext(ctx, c.headers)
+
+	status, err := c.gClient.UnassignRole(ctx, &UnassignRoleRequest{
+		Role:     role,
+		Username: username,
+	})
+
+	if err == nil && status != nil && status.Status {
+		return nil
+	}
 
 	return err
 }

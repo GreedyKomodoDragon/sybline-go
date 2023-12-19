@@ -1,0 +1,11 @@
+{
+    "version": "1",
+    "role": "role_name",
+    "actions": {
+        "GetMessages": "deny:*",
+        "SubmitMessage": "deny:*",
+        "SubmitBatchedMessages": "deny:*",
+        "CreateQueue": "deny",
+        "ChangePassword": "deny"
+    }
+}
