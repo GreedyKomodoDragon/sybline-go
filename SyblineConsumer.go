@@ -47,9 +47,10 @@ func (s *syblineConsumer) run() {
 			continue
 		}
 
-		s.holding.AddDelta(len(messages))
 		for _, m := range messages {
-			s.Messages.Send(m)
+			if ok := s.Messages.Send(m); ok {
+				s.holding.AddDelta(1)
+			}
 		}
 	}
 }

@@ -16,18 +16,22 @@ func NewUniqueChannel(cap int) *UniqueChannel {
 	}
 }
 
-func (uc *UniqueChannel) Send(value *MessageData) {
+func (uc *UniqueChannel) Send(value *MessageData) bool {
 	if value == nil {
-		return
+		return false
 	}
 
 	uc.mu.Lock()
 	defer uc.mu.Unlock()
 
 	if id := string(value.Id); !uc.seenVals[id] {
-		uc.Ch <- value
 		uc.seenVals[id] = true
+		uc.Ch <- value
+
+		return true
 	}
+
+	return false
 }
 
 func (uc *UniqueChannel) Remove(value *MessageData) {
